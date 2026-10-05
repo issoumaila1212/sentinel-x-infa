@@ -1,0 +1,15 @@
+name: sentinel-x
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: sx-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+
+volumes:
+  mosquitto-data:
