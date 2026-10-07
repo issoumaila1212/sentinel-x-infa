@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS readings (
     temperature REAL,
     humidity    REAL,
     gas         INTEGER,
-    presence    INTEGER
+    presence    INTEGER,
+    distance    REAL
 );
 CREATE INDEX IF NOT EXISTS idx_readings_device_ts ON readings(device, ts);
 
@@ -47,8 +48,9 @@ def insert_reading(r):
     conn = connect()
     with conn:
         conn.execute(
-            "INSERT INTO readings (device, temperature, humidity, gas, presence) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (r["device"], r["temperature"], r["humidity"], r["gas"], int(bool(r["presence"]))),
+            "INSERT INTO readings (device, temperature, humidity, gas, presence, distance) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (r["device"], r["temperature"], r["humidity"], r["gas"],
+             int(bool(r["presence"])), r.get("distance")),
         )
     conn.close()

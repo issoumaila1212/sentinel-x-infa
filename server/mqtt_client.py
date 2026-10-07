@@ -23,6 +23,11 @@ def validate(topic, data):
         raise ValueError("humidité hors plage")
     if not 0 <= int(data["gas"]) <= 1024:
         raise ValueError("gaz hors plage")
+
+    distance = data.get("distance")
+    if distance is not None and not 0 <= float(distance) <= 450:
+        raise ValueError("distance hors plage")
+
     return data
 
 
