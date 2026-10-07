@@ -1,0 +1,10 @@
+<!doctype html>
+<html><body>
+<h1>Sentinel-X</h1>
+<pre id="data"></pre>
+<script>
+setInterval(() => fetch('/api/sensors').then(r => r.json()).then(d =>
+  document.getElementById('data').textContent = JSON.stringify(d, null, 2)
+), 2000);
+</script>
+</body></html>
