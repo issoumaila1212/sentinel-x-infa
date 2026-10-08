@@ -1,16 +1,31 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth.jsx'
+import { errorMessage } from '../api'
 
 export default function Login() {
+  const { user, loading, login } = useAuth()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const navigate = useNavigate()
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const handleSubmit = (e) => {
+  if (!loading && user) return <Navigate to="/dashboard" replace />
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // PLACEHOLDER: no real authentication yet.
-    // Next step: send username/password to Flask, receive a token, store it, read the role.
-    navigate('/dashboard')
+    setBusy(true)
+    setError('')
+    try {
+      await login(username, password)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(errorMessage(err))
+      setPassword('')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -38,7 +53,8 @@ export default function Login() {
           required
         />
 
-        <button type="submit">Sign in</button>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
       </form>
     </div>
   )

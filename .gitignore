@@ -3,4 +3,7 @@ mosquitto/certs/
 mosquitto/config/passwd
 .venv/
 data/
+firmware/esp8266_node/secrets.h
+firmware/esp8266_node/ca_cert.h
+*.key
 __pycache__/

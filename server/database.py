@@ -27,6 +27,26 @@ CREATE TABLE IF NOT EXISTS alerts (
     score        REAL,
     acknowledged INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK (role IN ('user', 'admin', 'superadmin')),
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    last_login    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    username TEXT,
+    ip       TEXT,
+    action   TEXT NOT NULL,
+    success  INTEGER NOT NULL DEFAULT 1,
+    detail   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ip_ts ON audit_log(ip, ts);
 """
 
 
@@ -45,12 +65,17 @@ def init_db():
 
 
 def insert_reading(r):
+    # A node may have only some of the sensors: missing values are stored as NULL.
+    presence = r.get("presence")
+    gas = r.get("gas")
     conn = connect()
     with conn:
         conn.execute(
             "INSERT INTO readings (device, temperature, humidity, gas, presence, distance) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (r["device"], r["temperature"], r["humidity"], r["gas"],
-             int(bool(r["presence"])), r.get("distance")),
+            (r["device"], r.get("temperature"), r.get("humidity"),
+             None if gas is None else int(gas),
+             None if presence is None else int(bool(presence)),
+             r.get("distance")),
         )
     conn.close()

@@ -1,15 +1,22 @@
-name: sentinel-x
+name: sentinel
 
 services:
   mosquitto:
-    image: eclipse-mosquitto:2.0.20
-    container_name: sx-mosquitto
+    image: eclipse-mosquitto:2
+    container_name: sentinel-mosquitto
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "8883:8883"
+    environment:
+      - MQTT_ESP_PASSWORD=${MQTT_ESP_PASSWORD:?Set MQTT_ESP_PASSWORD in .env}
+      - MQTT_SERVER_PASSWORD=${MQTT_SERVER_PASSWORD:?Set MQTT_SERVER_PASSWORD in .env}
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/certs:/mosquitto/certs:ro
       - mosquitto-data:/mosquitto/data
+    # Rebuilds the password file at every start: users "esp8266" (the node) and "server" (our Python subscriber)
+    entrypoint: [ "sh", "-c", "rm -f /tmp/passwd && mosquitto_passwd -c -b /tmp/passwd esp8266 \"$$MQTT_ESP_PASSWORD\" && mosquitto_passwd -b /tmp/passwd server \"$$MQTT_SERVER_PASSWORD\" && chown mosquitto:mosquitto /tmp/passwd && chmod 600 /tmp/passwd && exec mosquitto -c /mosquitto/config/mosquitto.conf" ]
+
 
 volumes:
   mosquitto-data:
