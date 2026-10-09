@@ -79,3 +79,13 @@ def insert_reading(r):
              r.get("distance")),
         )
     conn.close()
+
+
+def insert_alert(device, source, level, message, score=None):
+    conn = connect()
+    with conn:
+        conn.execute(
+            "INSERT INTO alerts (device, source, level, message, score) VALUES (?, ?, ?, ?, ?)",
+            (device, source, level, message, score),
+        )
+    conn.close()

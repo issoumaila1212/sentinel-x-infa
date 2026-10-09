@@ -1,0 +1,23 @@
+# Config du relais vidéo Sentinel-X.
+# go2rtc se connecte UNE fois au flux brut envoyé par le Raspberry Pi,
+# et le redistribue à tous ceux qui en ont besoin (dashboard, IA, jury)
+# sans surcharger le Pi avec plusieurs connexions directes.
+
+streams:
+  cam01:
+    - http://10.62.75.253:5000/video_feed
+
+    # Cas B — le Pi expose un flux RTSP (ex: rpicam-vid + rtsp-simple-server) :
+    # - rtsp://RASPBERRY_IP:8554/cam01
+
+    # Cas C — libcamera encode direct en h264 et pousse en RTSP :
+    # - ffmpeg:rtsp://RASPBERRY_IP:8554/cam01#video=h264
+
+log:
+  level: info
+
+api:
+  listen: ":1984"   # interface web go2rtc : http://<IP_SERVEUR>:1984 (liste des flux, lecteur de test intégré)
+
+webrtc:
+  listen: ":8555"   # nécessaire pour un flux fluide et à faible latence côté dashboard

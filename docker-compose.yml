@@ -10,12 +10,25 @@ services:
     environment:
       - MQTT_ESP_PASSWORD=${MQTT_ESP_PASSWORD:?Set MQTT_ESP_PASSWORD in .env}
       - MQTT_SERVER_PASSWORD=${MQTT_SERVER_PASSWORD:?Set MQTT_SERVER_PASSWORD in .env}
+      - MQTT_IA_PASSWORD=${MQTT_IA_PASSWORD:?Set MQTT_IA_PASSWORD in .env}
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./mosquitto/certs:/mosquitto/certs:ro
       - mosquitto-data:/mosquitto/data
     # Rebuilds the password file at every start: users "esp8266" (the node) and "server" (our Python subscriber)
-    entrypoint: [ "sh", "-c", "rm -f /tmp/passwd && mosquitto_passwd -c -b /tmp/passwd esp8266 \"$$MQTT_ESP_PASSWORD\" && mosquitto_passwd -b /tmp/passwd server \"$$MQTT_SERVER_PASSWORD\" && chown mosquitto:mosquitto /tmp/passwd && chmod 600 /tmp/passwd && exec mosquitto -c /mosquitto/config/mosquitto.conf" ]
+    entrypoint: [ "sh", "-c", "rm -f /tmp/passwd && mosquitto_passwd -c -b /tmp/passwd esp8266 \"$$MQTT_ESP_PASSWORD\" && mosquitto_passwd -b /tmp/passwd server \"$$MQTT_SERVER_PASSWORD\" && mosquitto_passwd -b /tmp/passwd ia \"$$MQTT_IA_PASSWORD\" && chown mosquitto:mosquitto /tmp/passwd && chmod 600 /tmp/passwd && exec mosquitto -c /mosquitto/config/mosquitto.conf" ]
+
+
+  go2rtc:
+    image: alexxit/go2rtc:1.9.4
+    container_name: sentinel-go2rtc
+    restart: unless-stopped
+    ports:
+      - "1984:1984"       # interface web / API go2rtc (debug + lecteur de test)
+      - "8555:8555/tcp"   # WebRTC (signalisation + data)
+      - "8555:8555/udp"   # WebRTC (flux média, faible latence)
+    volumes:
+      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
 
 
 volumes:
