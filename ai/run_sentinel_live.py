@@ -6,31 +6,30 @@ import cv2
 import paho.mqtt.client as mqtt
 from model_class import SentinelAI
 
-# ==================== NETWORK & CREDENTIALS CONFIG ====================
-MQTT_HOST = "10.62.75.50"               
-MQTT_PORT = 8883                        # 1883 non-TLS)
-MQTT_USER = "sentinel_admin"            
-MQTT_PASS = "J7w5XRXtbCkkNeQsUahADIArluY"      
+# ==================== CREDENTIALS & NETWORK CONFIG ====================
+MQTT_HOST = "10.62.75.50"               # Broker Host / IP (Raspberry Pi)
+MQTT_PORT = 8883                        # 8883 for TLS
+MQTT_USER = "ia"                        # Your MQTT username
+MQTT_PASS = "J7w5XRXtbCkkNeQsUahADIArluY"       # Your MQTT password
 
-CA_CERT_PATH = "mosquitto/certs/ca.crt"             
+# Path to the CA certificate file (.crt or .pem) on your PC
+CA_CERT_PATH = "mosquitto/certs/ca.crt"
 
-# MQTT Topics
-MQTT_TOPIC_TELEMETRY = "sentinel/telemetry"       # Published by serial_mqtt_bridge.py
-MQTT_TOPIC_DASHBOARD = "sentinel/admin/dashboard" # Republished diagnostic output
+# Topics
+MQTT_TOPIC_TELEMETRY = "sentinel/telemetry"       # Inbound JSON from hardware
+MQTT_TOPIC_DASHBOARD = "sentinel/admin/dashboard" # Outbound diagnostic JSON for web UI
 
+# Camera Stream URL (go2rtc / MJPEG on the Pi, port 1984)
 STREAM_URL = "http://10.62.75.50:1984/api/stream.mjpeg?src=cam01"
 # ======================================================================
 
-print("=" * 75)
-print("SENTINEL-X : LIVE HARDWARE DEPLOYMENT")
+print("=" * 80)
+print("SENTINEL-X : LIVE SYSTEM DEPLOYMENT")
 print(f"Target Gateway: {MQTT_HOST}:{MQTT_PORT} (TLS Encrypted)")
 print(f"Video Stream  : {STREAM_URL}")
-print("=" * 75)
+print("=" * 80)
 
-# Initialize SentinelAI:
-# - calibration_samples: 15 frames of calm baseline
-# - idle_heartbeat: 5.0 seconds
-# - alarm_hold_duration: 10.0 seconds cooldown
+# Initialize SentinelAI (15 calibration cycles, 5.0s idle scan, 10.0s alarm hold)
 ai = SentinelAI(
     calibration_samples=15,
     stream_source=STREAM_URL,
@@ -47,27 +46,27 @@ def on_connect(client, userdata, flags, rc):
         4: "Refused - bad username or password",
         5: "Refused - not authorized / TLS handshake error"
     }
-    status_text = connection_codes.get(rc, f"Error code {rc}")
+    msg = connection_codes.get(rc, f"Error code {rc}")
     
     if rc == 0:
-        print(f"\n[MQTT/TLS] {status_text} to broker {MQTT_HOST}:{MQTT_PORT}")
+        print(f"\n[MQTT/TLS] {msg} to broker {MQTT_HOST}:{MQTT_PORT}")
         client.subscribe(MQTT_TOPIC_TELEMETRY)
-        print(f"[MQTT] Subscribed to topic: '{MQTT_TOPIC_TELEMETRY}'")
-        print("[SYSTEM] Ready. Gathering first 15 readings for baseline calibration...\n")
+        print(f"[MQTT] Subscribed to telemetry topic: '{MQTT_TOPIC_TELEMETRY}'")
+        print("[SYSTEM] Collecting first 15 readings for baseline calibration...\n")
     else:
-        print(f"\n[MQTT ERROR] {status_text} (code {rc})")
+        print(f"\n[MQTT ERROR] {msg} (code {rc})")
 
 def on_message(client, userdata, msg):
     try:
         raw_payload = msg.payload.decode("utf-8")
         data = json.loads(raw_payload)
 
-        #Extract physical readings (HC-SR04 & DHT22)
+        # 1. Extract physical readings (HC-SR04 & DHT22, no PIR dependency)
         dist = float(data.get("distance", data.get("dist", 220.0)))
         temp = float(data.get("temperature", data.get("temp", 21.0)))
         hum  = float(data.get("humidity", data.get("hum", 50.0)))
 
-        #Feed into SentinelAI pipeline
+        # 2. Feed into SentinelAI pipeline
         result = ai.process_reading(dist=dist, temp=temp, hum=hum)
 
         threat = result.get("threat_level", "UNKNOWN")
@@ -76,7 +75,7 @@ def on_message(client, userdata, msg):
         cooldown = result.get("cooldown_remaining_sec", 0.0)
         anomaly = result.get("anomaly", False)
 
-        #Terminal logging
+        # 3. Terminal logging
         print(
             f"[{time.strftime('%H:%M:%S')}] {status:<16} | "
             f"Threat: {threat:<24} | "
@@ -85,11 +84,10 @@ def on_message(client, userdata, msg):
             f"Alerts: {alerts}"
         )
 
-        #Display live video feed with HUD overlays
+        # 4. Display live video feed with HUD overlays
         frame = result.get("frame")
         if frame is not None:
             display_frame = frame.copy()
-            
             is_danger = any(k in threat for k in ["CRITICAL", "HAZARD"])
             badge_color = (0, 0, 255) if is_danger else (0, 255, 0)
 
@@ -104,7 +102,7 @@ def on_message(client, userdata, msg):
                 2
             )
 
-            # Cooldown HUD
+            # Cooldown HUD Banner
             if cooldown > 0:
                 cv2.putText(
                     display_frame,
@@ -143,7 +141,7 @@ def on_message(client, userdata, msg):
             cv2.imshow("Sentinel-X Central Station (Live Hardware)", display_frame)
             cv2.waitKey(1)
 
-        #Republish aggregated verdict to dashboard topic
+        # 5. Republish aggregated verdict to dashboard topic
         dashboard_packet = {k: v for k, v in result.items() if k != "frame"}
         dashboard_packet["timestamp"] = time.time()
         client.publish(MQTT_TOPIC_DASHBOARD, json.dumps(dashboard_packet))
@@ -153,7 +151,7 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"[PIPELINE ERROR] Unexpected error: {e}")
 
-# ==================== MQTT & TLS SETUP ====================
+# ==================== MQTT CLIENT SETUP WITH TLS ====================
 client = mqtt.Client()
 client.username_pw_set(username=MQTT_USER, password=MQTT_PASS)
 
@@ -165,25 +163,25 @@ try:
         cert_reqs=ssl.CERT_REQUIRED,
         tls_version=ssl.PROTOCOL_TLS_CLIENT
     )
-    #Allows connection when connecting via IP address rather than a domain name
+    # Allows connection when connecting via IP address rather than hostname
     client.tls_insecure_set(True)
 except Exception as e:
-    print(f"[TLS CONFIG ERROR] Failed to set up TLS with '{CA_CERT_PATH}': {e}")
-    print("Make sure the CA certificate file is placed in this directory.")
+    print(f"[TLS CONFIG ERROR] Failed to configure TLS with '{CA_CERT_PATH}': {e}")
+    print("Verify the path to your CA certificate file.")
 
 client.on_connect = on_connect
 client.on_message = on_message
 
 # ==================== MAIN EXECUTION ====================
 try:
-    print(f"[SYSTEM] Connecting to {MQTT_HOST}:{MQTT_PORT}...")
+    print(f"[SYSTEM] Connecting to secure broker {MQTT_HOST}:{MQTT_PORT}...")
     client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
     
     # Process network loop
     client.loop_forever()
 
 except KeyboardInterrupt:
-    print("\n[SYSTEM] Termination requested by user.")
+    print("\n[SYSTEM] Safe shutdown requested by user.")
 finally:
     client.disconnect()
     ai.close()

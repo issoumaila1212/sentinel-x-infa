@@ -21,7 +21,7 @@ class SentinelAI:
         self.means = None
         self.stds = None
 
-        # 2. Machine Learning Models
+        # 2. Machine Learning Engines
         self.iso = IsolationForest(contamination=0.05, random_state=42)
         self.rf = RandomForestClassifier(n_estimators=30, random_state=42)
         self._init_rf()
@@ -33,7 +33,7 @@ class SentinelAI:
         self.camera_ready = False
 
         # 4. Adaptive Polling & Hysteresis State
-        self.idle_heartbeat = idle_heartbeat          # 5.0s scan when calm
+        self.idle_heartbeat = idle_heartbeat          # 5.0s patrol scan when nominal
         self.burst_interval = 0.1                     # ~10 FPS burst tracking when active
         self.alarm_hold_duration = alarm_hold_duration  # 10.0s retention cooldown
 
@@ -79,7 +79,7 @@ class SentinelAI:
         self.rf.fit(X, y)
 
     def _verify_with_vision(self, dist_cm: float):
-        """Fetches the latest video frame, runs YOLO person inference, and applies anti-spoof checks."""
+        """Fetches the latest frame, runs YOLO person inference, and applies anti-spoof checks."""
         if not self.camera_ready or self.cap is None:
             return self.last_person_detected, self.last_annotated_frame, self.last_spoof_alert
 
@@ -88,7 +88,7 @@ class SentinelAI:
             return self.last_person_detected, self.last_annotated_frame, self.last_spoof_alert
 
         frame_resized = cv2.resize(frame, (640, 480))
-        # Class 0 corresponds to 'person' in the COCO dataset
+        # Class 0 corresponds to 'person' in COCO dataset
         results = self.yolo(frame_resized, classes=[0], conf=0.5, verbose=False)
         boxes = results[0].boxes
         person_count = len(boxes)
@@ -99,7 +99,7 @@ class SentinelAI:
             for b in boxes:
                 _, y1, _, y2 = map(int, b.xyxy[0])
                 box_h = y2 - y1
-                # If bounding box is massive (>280px tall) but the distance sensor reads far (>180cm)
+                # If bounding box is massive (>280px tall) but the ultrasonic sensor reads far (>180cm)
                 if box_h > 280 and dist_cm > 180.0:
                     spoof_flag = True
                     cv2.putText(
@@ -118,6 +118,7 @@ class SentinelAI:
         """
         Ingests telemetry metrics, updates anomaly models, schedules adaptive vision,
         and returns an aggregated multi-threat assessment.
+        (pir parameter is retained with default 0 for backward compatibility)
         """
         # ==========================================
         # Phase 1: Dynamic Baseline Calibration
